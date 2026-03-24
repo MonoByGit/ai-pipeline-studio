@@ -97,13 +97,13 @@ function Badge({
 }) {
   const styles = {
     neutral: { background: "#F1EFE8", color: "#2C2C2A" },
-    risk: { background: "#FDE8E8", color: "#E24B4A" },
+    risk: { background: "#FCEBEB", color: "#791F1F" },
     success: { background: "#E1F5EE", color: "#085041" },
   };
   return (
     <span
-      className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium"
-      style={styles[variant]}
+      className="inline-flex items-center shrink-0 whitespace-nowrap rounded-full text-[11px] font-medium"
+      style={{ ...styles[variant], padding: "3px 8px", borderRadius: "99px" }}
     >
       {children}
     </span>
@@ -145,22 +145,28 @@ function StepOutput({
             >
               <FieldLabel>{label}</FieldLabel>
               {key === "urgency" ? (
-                <Badge
-                  variant={
-                    String(data[key]).toLowerCase() === "high"
-                      ? "risk"
-                      : String(data[key]).toLowerCase() === "low"
-                        ? "success"
-                        : "neutral"
-                  }
-                >
-                  {String(data[key])}
-                  {data.urgency_reason
-                    ? ` — ${String(data.urgency_reason)}`
-                    : ""}
-                </Badge>
+                <div className="flex flex-col gap-1">
+                  <div>
+                    <Badge
+                      variant={
+                        String(data[key]).toLowerCase() === "high"
+                          ? "risk"
+                          : String(data[key]).toLowerCase() === "low"
+                            ? "success"
+                            : "neutral"
+                      }
+                    >
+                      {String(data[key])}
+                    </Badge>
+                  </div>
+                  {!!data.urgency_reason && (
+                    <p className="text-[11px] leading-relaxed" style={{ color: "#888780", overflowWrap: "break-word" }}>
+                      {String(data.urgency_reason)}
+                    </p>
+                  )}
+                </div>
               ) : (
-                <p className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+                <p className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word" }}>
                   {formatValue(data[key])}
                 </p>
               )}
@@ -209,7 +215,7 @@ function StepOutput({
             <FieldLabel>Core Problem</FieldLabel>
             <p
               className="text-[13px] font-medium leading-snug"
-              style={{ color: "#2C2C2A" }}
+              style={{ color: "#2C2C2A", overflowWrap: "break-word" }}
             >
               {String(data.core_problem)}
             </p>
@@ -218,25 +224,33 @@ function StepOutput({
         {!!data.severity && (
           <div>
             <FieldLabel>Severity</FieldLabel>
-            <Badge
-              variant={
-                String(data.severity).toLowerCase() === "critical" ||
-                String(data.severity).toLowerCase() === "high"
-                  ? "risk"
-                  : String(data.severity).toLowerCase() === "low"
-                    ? "success"
-                    : "neutral"
-              }
-            >
-              {String(data.severity)}
-              {data.severity_reason ? ` — ${String(data.severity_reason)}` : ""}
-            </Badge>
+            <div className="flex flex-col gap-1">
+              <div>
+                <Badge
+                  variant={
+                    String(data.severity).toLowerCase() === "critical" ||
+                    String(data.severity).toLowerCase() === "high"
+                      ? "risk"
+                      : String(data.severity).toLowerCase() === "low"
+                        ? "success"
+                        : "neutral"
+                  }
+                >
+                  {String(data.severity)}
+                </Badge>
+              </div>
+              {!!data.severity_reason && (
+                <p className="text-[11px] leading-relaxed" style={{ color: "#888780", overflowWrap: "break-word" }}>
+                  {String(data.severity_reason)}
+                </p>
+              )}
+            </div>
           </div>
         )}
         {!!data.root_cause && (
           <div>
             <FieldLabel>Root Cause</FieldLabel>
-            <p className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+            <p className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word" }}>
               {String(data.root_cause)}
             </p>
           </div>
@@ -264,7 +278,7 @@ function StepOutput({
             <FieldLabel>Key Insight</FieldLabel>
             <p
               className="text-[13px] font-medium leading-snug"
-              style={{ color: "#2C2C2A" }}
+              style={{ color: "#2C2C2A", overflowWrap: "break-word" }}
             >
               {String(data.key_insight)}
             </p>
@@ -282,7 +296,7 @@ function StepOutput({
                   >
                     ▲
                   </span>
-                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word", minWidth: 0 }}>
                     {String(r)}
                   </span>
                 </li>
@@ -302,7 +316,7 @@ function StepOutput({
                   >
                     ◆
                   </span>
-                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word", minWidth: 0 }}>
                     {String(o)}
                   </span>
                 </li>
@@ -319,7 +333,7 @@ function StepOutput({
                   <span className="text-[11px] mt-0.5 flex-shrink-0" style={{ color: "#888780" }}>
                     —
                   </span>
-                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word", minWidth: 0 }}>
                     {String(p)}
                   </span>
                 </li>
@@ -369,7 +383,7 @@ function StepOutput({
                   >
                     ✓
                   </span>
-                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word", minWidth: 0 }}>
                     {String(action)}
                   </span>
                 </li>
@@ -389,7 +403,7 @@ function StepOutput({
                   >
                     ○
                   </span>
-                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A" }}>
+                  <span className="text-[12px] leading-relaxed" style={{ color: "#2C2C2A", overflowWrap: "break-word", minWidth: 0 }}>
                     {String(action)}
                   </span>
                 </li>
@@ -400,7 +414,7 @@ function StepOutput({
         {!!data.success_metric && (
           <div>
             <FieldLabel>Success Metric</FieldLabel>
-            <p className="text-[12px] leading-relaxed" style={{ color: "#888780" }}>
+            <p className="text-[12px] leading-relaxed" style={{ color: "#888780", overflowWrap: "break-word" }}>
               {String(data.success_metric)}
             </p>
           </div>
@@ -584,9 +598,11 @@ function PipelineNode({
             className="overflow-hidden"
           >
             <div
-              className="mx-4 mb-4 pt-3"
+              className="mx-4 mb-4 pt-3 min-w-0"
               style={{
                 borderTop: `1px solid ${status === "error" ? "#F9CACA" : status === "done" ? "#A3E4D0" : "#D3D1C7"}`,
+                overflowWrap: "break-word",
+                wordBreak: "break-word",
               }}
             >
               {status === "error" ? (
