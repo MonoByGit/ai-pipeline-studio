@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -655,90 +655,229 @@ function Connector({ filled }: { filled: boolean }) {
   );
 }
 
+// ─── Mobile Gate ──────────────────────────────────────────────────────────────
+
+function MobileGate() {
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
+      style={{ background: "#F5F4F0" }}
+    >
+      <div
+        className="w-full rounded-2xl p-8 text-center"
+        style={{
+          background: "#FFFFFF",
+          border: "0.5px solid #D3D1C7",
+          maxWidth: "340px",
+        }}
+      >
+        {/* App name */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <span
+            className="text-[17px] font-medium"
+            style={{ color: "#2C2C2A", letterSpacing: "-0.03em" }}
+          >
+            AI Pipeline Studio
+          </span>
+          <span
+            className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+            style={{ background: "#E6F1FB", color: "#0C447C" }}
+          >
+            beta
+          </span>
+        </div>
+
+        {/* Desktop illustration */}
+        <div className="flex justify-center mb-8">
+          <svg
+            width="80"
+            height="60"
+            viewBox="0 0 80 60"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              x="1"
+              y="1"
+              width="78"
+              height="47"
+              rx="5"
+              stroke="#D3D1C7"
+              strokeWidth="1.5"
+              fill="#F5F4F0"
+            />
+            <rect
+              x="8"
+              y="8"
+              width="64"
+              height="33"
+              rx="2.5"
+              fill="#E6F1FB"
+              stroke="#85B7EB"
+              strokeWidth="0.5"
+            />
+            {/* Pipeline dots */}
+            <circle cx="20" cy="24" r="5" fill="#5DCAA5" opacity="0.5" />
+            <circle cx="34" cy="24" r="5" fill="#85B7EB" opacity="0.5" />
+            <circle cx="48" cy="24" r="5" fill="#85B7EB" opacity="0.3" />
+            <circle cx="62" cy="24" r="5" fill="#D3D1C7" opacity="0.6" />
+            {/* Connectors */}
+            <line x1="25" y1="24" x2="29" y2="24" stroke="#D3D1C7" strokeWidth="1" />
+            <line x1="39" y1="24" x2="43" y2="24" stroke="#D3D1C7" strokeWidth="1" />
+            <line x1="53" y1="24" x2="57" y2="24" stroke="#D3D1C7" strokeWidth="1" />
+            {/* Stand */}
+            <rect x="32" y="48" width="16" height="5" rx="0.5" fill="#D3D1C7" />
+            <rect x="24" y="53" width="32" height="3.5" rx="1.75" fill="#D3D1C7" />
+          </svg>
+        </div>
+
+        {/* Message */}
+        <p
+          className="text-[14px] leading-relaxed mb-8"
+          style={{ color: "#2C2C2A" }}
+        >
+          AI Pipeline Studio works best on a larger screen. For the full
+          experience, open this on your desktop or laptop.
+        </p>
+
+        {/* Divider */}
+        <div
+          style={{
+            height: "0.5px",
+            background: "#EBE9E1",
+            marginBottom: "16px",
+          }}
+        />
+
+        {/* Credit */}
+        <p className="text-[11px]" style={{ color: "#B4B2A9" }}>
+          Built by{" "}
+          <a
+            href="#"
+            style={{ color: "#888780", textDecoration: "underline", textUnderlineOffset: "2px" }}
+          >
+            Dusty Baars
+          </a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
+type WizardStep = "input" | "processing" | "results";
 
 export default function Home() {
   const [input, setInput] = useState("");
   const [steps, setSteps] = useState<StepState[]>(INITIAL_STEPS);
   const [isRunning, setIsRunning] = useState(false);
   const [isDone, setIsDone] = useState(false);
+  const [wizardStep, setWizardStep] = useState<WizardStep>("input");
+  const [isMobile, setIsMobile] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const prefersReducedMotion = useReducedMotion();
 
-  const runPipeline = useCallback(async (text?: string) => {
-    const inputText = text ?? input;
-    if (!inputText.trim() || isRunning) return;
+  // ── Mobile detection ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
-    // Reset state
-    setSteps(INITIAL_STEPS);
-    setIsDone(false);
-    setIsRunning(true);
+  // ── Auto-advance to results when pipeline completes ───────────────────────
+  useEffect(() => {
+    if (isDone && wizardStep === "processing") {
+      const delay = prefersReducedMotion ? 0 : 500;
+      const t = setTimeout(() => setWizardStep("results"), delay);
+      return () => clearTimeout(t);
+    }
+  }, [isDone, wizardStep, prefersReducedMotion]);
 
-    abortRef.current = new AbortController();
+  // ── Pipeline runner (API logic unchanged) ─────────────────────────────────
+  const runPipeline = useCallback(
+    async (text?: string) => {
+      const inputText = text ?? input;
+      if (!inputText.trim() || isRunning) return;
 
-    try {
-      const response = await fetch("/api/pipeline", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: inputText }),
-        signal: abortRef.current.signal,
-      });
+      // Transition to Step 2 and reset state
+      setSteps(INITIAL_STEPS);
+      setIsDone(false);
+      setIsRunning(true);
+      setWizardStep("processing");
 
-      if (!response.body) throw new Error("No response body");
+      abortRef.current = new AbortController();
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
+      try {
+        const response = await fetch("/api/pipeline", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input: inputText }),
+          signal: abortRef.current.signal,
+        });
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        if (!response.body) throw new Error("No response body");
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
 
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            if (event.done) {
-              setIsDone(true);
-              continue;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() ?? "";
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.done) {
+                setIsDone(true);
+                continue;
+              }
+
+              if (typeof event.step === "number") {
+                setSteps((prev) => {
+                  const next = [...prev];
+                  next[event.step] = {
+                    status: event.status as NodeStatus,
+                    result: event.result,
+                    parsed: event.result ? parseResult(event.result) : null,
+                  };
+                  return next;
+                });
+              }
+            } catch {
+              // skip malformed events
             }
-
-            if (typeof event.step === "number") {
-              setSteps((prev) => {
-                const next = [...prev];
-                next[event.step] = {
-                  status: event.status as NodeStatus,
-                  result: event.result,
-                  parsed: event.result ? parseResult(event.result) : null,
-                };
-                return next;
-              });
-            }
-          } catch {
-            // skip malformed events
           }
         }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        console.error("Pipeline error:", err);
+      } finally {
+        setIsRunning(false);
       }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      console.error("Pipeline error:", err);
-    } finally {
-      setIsRunning(false);
-    }
-  }, [input, isRunning]);
+    },
+    [input, isRunning]
+  );
 
+  // ── Reset (returns to Step 1) ──────────────────────────────────────────────
   const handleReset = useCallback(() => {
     abortRef.current?.abort();
     setSteps(INITIAL_STEPS);
     setIsRunning(false);
     setIsDone(false);
     setInput("");
+    setWizardStep("input");
   }, []);
 
+  // ── Preset quick-fill (no auto-run) ───────────────────────────────────────
   const handlePreset = useCallback(
     (text: string) => {
       if (isRunning) return;
@@ -749,146 +888,472 @@ export default function Home() {
     [isRunning]
   );
 
-  const completedCount = steps.filter((s) => s.status === "done" || s.status === "error").length;
+  // ── PDF export via print ───────────────────────────────────────────────────
+  const handleExportPDF = useCallback(() => {
+    const today = new Date().toISOString().split("T")[0];
+    const originalTitle = document.title;
+    document.title = `pipeline-report-${today}`;
+    window.print();
+    document.title = originalTitle;
+  }, []);
+
+  const completedCount = steps.filter(
+    (s) => s.status === "done" || s.status === "error"
+  ).length;
+
+  // ── Mobile gate ───────────────────────────────────────────────────────────
+  if (isMobile) return <MobileGate />;
+
+  // ── Shared motion config ──────────────────────────────────────────────────
+  const fadeIn = prefersReducedMotion
+    ? {}
+    : { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.3 } };
+
+  const fadeOut = prefersReducedMotion
+    ? {}
+    : { exit: { opacity: 0, transition: { duration: 0.2 } } };
 
   return (
-    <div className="min-h-screen px-4 py-10 md:px-8 lg:px-12" style={{ background: "#FAFAF8" }}>
-      {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto mb-10">
-        <div className="flex items-baseline gap-3 mb-2">
-          <h1
-            className="text-[22px] font-medium"
-            style={{ color: "#2C2C2A", letterSpacing: "-0.04em" }}
-          >
-            AI Pipeline Studio
-          </h1>
-          <span
-            className="text-[11px] font-medium px-2 py-0.5 rounded-full"
-            style={{ background: "#E6F1FB", color: "#0C447C" }}
-          >
-            beta
-          </span>
-        </div>
-        <p className="text-[13px]" style={{ color: "#888780" }}>
-          Paste any business input and watch it flow through a chain of AI
-          reasoning steps in real time.
-        </p>
-      </div>
+    <div style={{ background: "#F5F4F0", minHeight: "100vh" }}>
+      <AnimatePresence mode="wait">
 
-      {/* ── Input Area ─────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div
-          className="rounded-2xl p-5"
-          style={{
-            background: "#FFFFFF",
-            border: "0.5px solid #D3D1C7",
-          }}
-        >
-          {/* Preset buttons */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span
-              className="text-[11px] self-center mr-1"
-              style={{ color: "#B4B2A9" }}
+        {/* ━━━━━━━━━━━━━━━━━━ STEP 1: INPUT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        {wizardStep === "input" && (
+          <motion.div
+            key="input-screen"
+            {...fadeIn}
+            {...fadeOut}
+          >
+            <div
+              style={{
+                maxWidth: "1100px",
+                margin: "0 auto",
+                padding: "48px 32px",
+              }}
             >
-              Quick start:
-            </span>
-            {PRESETS.map((preset) => (
-              <button
-                key={preset.label}
-                onClick={() => handlePreset(preset.text)}
-                disabled={isRunning}
-                className="text-[11px] font-medium px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+              {/* Header */}
+              <div style={{ marginBottom: "40px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "10px",
+                    marginBottom: "8px",
+                  }}
+                >
+                  <h1
+                    style={{
+                      fontSize: "22px",
+                      fontWeight: 500,
+                      color: "#2C2C2A",
+                      letterSpacing: "-0.04em",
+                      margin: 0,
+                    }}
+                  >
+                    AI Pipeline Studio
+                  </h1>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      padding: "2px 8px",
+                      borderRadius: "99px",
+                      background: "#E6F1FB",
+                      color: "#0C447C",
+                    }}
+                  >
+                    beta
+                  </span>
+                </div>
+                <p style={{ fontSize: "13px", color: "#888780", margin: 0 }}>
+                  Paste any business input and watch it flow through a chain of
+                  AI reasoning steps in real time.
+                </p>
+              </div>
+
+              {/* Input card */}
+              <div
                 style={{
-                  background: "transparent",
-                  border: "0.5px solid #B4B2A9",
-                  color: "#2C2C2A",
-                  cursor: isRunning ? "not-allowed" : "pointer",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isRunning) {
-                    e.currentTarget.style.background = "#F1EFE8";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = "transparent";
+                  background: "#FFFFFF",
+                  border: "0.5px solid #D3D1C7",
+                  borderRadius: "16px",
+                  padding: "24px",
+                  marginBottom: "40px",
                 }}
               >
-                {preset.label}
-              </button>
-            ))}
-          </div>
+                {/* Preset buttons */}
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                    marginBottom: "20px",
+                    alignItems: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#B4B2A9",
+                      marginRight: "4px",
+                    }}
+                  >
+                    Quick start:
+                  </span>
+                  {PRESETS.map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => handlePreset(preset.text)}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 500,
+                        padding: "6px 12px",
+                        borderRadius: "8px",
+                        background: "transparent",
+                        border: "0.5px solid #B4B2A9",
+                        color: "#2C2C2A",
+                        cursor: "pointer",
+                        transition: "background 150ms",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "#F1EFE8";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
 
-          {/* Textarea */}
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            disabled={isRunning}
-            placeholder="Paste a customer complaint, support ticket, sales email, or product feedback..."
-            rows={5}
-            className="w-full resize-none outline-none text-[13px] leading-relaxed placeholder-[#B4B2A9] disabled:opacity-60"
-            style={{
-              background: "transparent",
-              color: "#2C2C2A",
-              fontFamily: "inherit",
-              border: "none",
-              padding: 0,
-            }}
-          />
+                {/* Textarea */}
+                <textarea
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={
+                    "Paste a customer complaint, support ticket, sales email, or product feedback here...\n\nExamples:\n— An angry customer email about a delayed order\n— A sales pitch following up after a conference\n— Post-launch product feedback from a power user"
+                  }
+                  style={{
+                    width: "100%",
+                    minHeight: "220px",
+                    resize: "vertical",
+                    outline: "none",
+                    fontSize: "13px",
+                    lineHeight: "1.7",
+                    color: "#2C2C2A",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    fontFamily:
+                      "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
+                    boxSizing: "border-box",
+                  }}
+                />
 
-          {/* Actions */}
-          <div className="flex items-center justify-between mt-4 pt-4" style={{ borderTop: "0.5px solid #EBE9E1" }}>
-            <div className="flex items-center gap-2">
-              {isRunning && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-2"
+                {/* Run button row */}
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "20px",
+                    paddingTop: "16px",
+                    borderTop: "0.5px solid #EBE9E1",
+                  }}
+                >
+                  <button
+                    onClick={() => runPipeline()}
+                    disabled={!input.trim()}
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: 500,
+                      padding: "8px 18px",
+                      borderRadius: "8px",
+                      background: !input.trim() ? "#E8E6DF" : "#185FA5",
+                      color: !input.trim() ? "#B4B2A9" : "#E6F1FB",
+                      border: "none",
+                      cursor: !input.trim() ? "not-allowed" : "pointer",
+                      transition: "background 150ms, color 150ms",
+                      letterSpacing: "-0.01em",
+                    }}
+                  >
+                    Run Pipeline →
+                  </button>
+                </div>
+              </div>
+
+              {/* Static preview — nodes in waiting state */}
+              <div>
+                <p
+                  style={{
+                    fontSize: "11px",
+                    color: "#B4B2A9",
+                    marginBottom: "14px",
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  PIPELINE PREVIEW — 5 AI PROCESSING STEPS
+                </p>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    overflow: "hidden",
+                  }}
+                >
+                  {PIPELINE_STEPS.map((step, i) => (
+                    <div
+                      key={step.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        flex: 1,
+                        minWidth: 0,
+                      }}
+                    >
+                      <PipelineNode
+                        step={step}
+                        index={i}
+                        state={INITIAL_STEPS[i]}
+                      />
+                      {i < PIPELINE_STEPS.length - 1 && (
+                        <Connector filled={false} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ━━━━━━━━━━━━━━━━━━ STEP 2: PROCESSING ━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        {wizardStep === "processing" && (
+          <motion.div
+            key="processing-screen"
+            initial={prefersReducedMotion ? undefined : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={prefersReducedMotion ? undefined : { opacity: 0, transition: { duration: 0.2 } }}
+            transition={{ duration: 0.3 }}
+          >
+            <div
+              style={{
+                maxWidth: "1100px",
+                margin: "0 auto",
+                padding: "48px 32px",
+              }}
+            >
+              {/* Header with progress */}
+              <div style={{ marginBottom: "40px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    gap: "10px",
+                    marginBottom: "12px",
+                  }}
+                >
+                  <h1
+                    style={{
+                      fontSize: "22px",
+                      fontWeight: 500,
+                      color: "#2C2C2A",
+                      letterSpacing: "-0.04em",
+                      margin: 0,
+                    }}
+                  >
+                    AI Pipeline Studio
+                  </h1>
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      padding: "2px 8px",
+                      borderRadius: "99px",
+                      background: "#E6F1FB",
+                      color: "#0C447C",
+                    }}
+                  >
+                    beta
+                  </span>
+                </div>
+
+                {/* Progress line */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                  }}
                 >
                   <div
-                    className="w-1.5 h-1.5 rounded-full"
                     style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
                       background: "#85B7EB",
+                      flexShrink: 0,
                       animation: "pulse 1s ease-in-out infinite",
                     }}
                   />
-                  <span className="text-[12px]" style={{ color: "#888780" }}>
-                    Processing step {completedCount + 1} of {PIPELINE_STEPS.length}...
+                  <span style={{ fontSize: "13px", color: "#888780" }}>
+                    {completedCount === PIPELINE_STEPS.length
+                      ? "Finishing up..."
+                      : `Analyzing your input — step ${completedCount + 1} of ${PIPELINE_STEPS.length}`}
                   </span>
-                </motion.div>
-              )}
-              {isDone && (
-                <motion.div
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2"
-                >
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <circle cx="6" cy="6" r="5.5" fill="#5DCAA5" />
-                    <path
-                      d="M3.5 6L5.5 8L8.5 4.5"
-                      stroke="white"
-                      strokeWidth="1.2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <span className="text-[12px]" style={{ color: "#085041" }}>
-                    Pipeline complete
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 500,
+                      color: "#B4B2A9",
+                      marginLeft: "2px",
+                    }}
+                  >
+                    {completedCount}/{PIPELINE_STEPS.length}
                   </span>
-                </motion.div>
-              )}
-            </div>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-2">
-              {(isDone || isRunning) && (
+              {/* Pipeline nodes — staggered fade-in */}
+              <div style={{ display: "flex", alignItems: "flex-start" }}>
+                {PIPELINE_STEPS.map((step, i) => (
+                  <motion.div
+                    key={step.id}
+                    initial={
+                      prefersReducedMotion
+                        ? undefined
+                        : { opacity: 0, y: 12 }
+                    }
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={
+                      prefersReducedMotion
+                        ? {}
+                        : {
+                            delay: i * 0.1,
+                            duration: 0.4,
+                            ease: [0.4, 0, 0.2, 1],
+                          }
+                    }
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      flex: 1,
+                      minWidth: 0,
+                    }}
+                  >
+                    <PipelineNode step={step} index={i} state={steps[i]} />
+                    {i < PIPELINE_STEPS.length - 1 && (
+                      <Connector filled={steps[i].status === "done"} />
+                    )}
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ━━━━━━━━━━━━━━━━━━ STEP 3: RESULTS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        {wizardStep === "results" && (
+          <motion.div
+            key="results-screen"
+            initial={prefersReducedMotion ? undefined : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            style={{ minHeight: "100vh" }}
+          >
+            {/* Sticky header bar */}
+            <motion.div
+              initial={prefersReducedMotion ? undefined : { y: -16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={
+                prefersReducedMotion
+                  ? {}
+                  : { duration: 0.3, ease: [0.4, 0, 0.2, 1] }
+              }
+              className="print-hide"
+              style={{
+                background: "#FFFFFF",
+                borderBottom: "0.5px solid #D3D1C7",
+                position: "sticky",
+                top: 0,
+                zIndex: 20,
+                padding: "14px 32px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              {/* Title */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "15px",
+                    fontWeight: 500,
+                    color: "#2C2C2A",
+                    letterSpacing: "-0.03em",
+                  }}
+                >
+                  AI Pipeline Studio
+                </span>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    fontWeight: 500,
+                    padding: "2px 6px",
+                    borderRadius: "99px",
+                    background: "#E6F1FB",
+                    color: "#0C447C",
+                  }}
+                >
+                  beta
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "#B4B2A9",
+                    marginLeft: "6px",
+                  }}
+                >
+                  — Analysis complete
+                </span>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  onClick={handleExportPDF}
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    padding: "7px 16px",
+                    borderRadius: "8px",
+                    background: "#185FA5",
+                    color: "#E6F1FB",
+                    border: "none",
+                    cursor: "pointer",
+                    letterSpacing: "-0.01em",
+                  }}
+                >
+                  Export PDF
+                </button>
                 <button
                   onClick={handleReset}
-                  className="text-[13px] font-medium px-4 py-2 rounded-lg transition-colors"
                   style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    padding: "7px 16px",
+                    borderRadius: "8px",
                     background: "transparent",
                     border: "0.5px solid #B4B2A9",
                     color: "#888780",
                     cursor: "pointer",
+                    letterSpacing: "-0.01em",
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = "#F1EFE8";
@@ -899,98 +1364,156 @@ export default function Home() {
                     e.currentTarget.style.color = "#888780";
                   }}
                 >
-                  Reset
+                  Start over
                 </button>
-              )}
-              <button
-                onClick={() => runPipeline()}
-                disabled={isRunning || !input.trim()}
-                className="text-[13px] font-medium px-4 py-2 rounded-lg transition-all"
+              </div>
+            </motion.div>
+
+            {/* Results body */}
+            <div
+              style={{
+                maxWidth: "1100px",
+                margin: "0 auto",
+                padding: "40px 32px 80px",
+              }}
+            >
+              {/* Print-only cover line */}
+              <div id="print-header" style={{ display: "none", marginBottom: "32px" }}>
+                <h1
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: 500,
+                    color: "#2C2C2A",
+                    letterSpacing: "-0.03em",
+                    margin: "0 0 4px",
+                  }}
+                >
+                  AI Pipeline Studio — Analysis Report
+                </h1>
+                <p style={{ fontSize: "12px", color: "#888780", margin: 0 }}>
+                  {new Date().toLocaleDateString("en-GB", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })}
+                </p>
+              </div>
+
+              {/* Results grid: 2-col on large screens */}
+              <div
                 style={{
-                  background: isRunning || !input.trim() ? "#B4B2A9" : "#185FA5",
-                  color: "#E6F1FB",
-                  border: "none",
-                  cursor: isRunning || !input.trim() ? "not-allowed" : "pointer",
-                  opacity: isRunning ? 0.7 : 1,
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                  gap: "16px",
+                }}
+                className="results-grid"
+              >
+                {PIPELINE_STEPS.map((step, i) => (
+                  <motion.div
+                    key={step.id}
+                    initial={
+                      prefersReducedMotion ? undefined : { opacity: 0, y: 20 }
+                    }
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={
+                      prefersReducedMotion
+                        ? {}
+                        : {
+                            delay: i * 0.08,
+                            duration: 0.4,
+                            ease: [0.4, 0, 0.2, 1],
+                          }
+                    }
+                    style={i === 4 ? { gridColumn: "1 / -1" } : {}}
+                  >
+                    <PipelineNode step={step} index={i} state={steps[i]} />
+                  </motion.div>
+                ))}
+              </div>
+
+              {/* Start over link */}
+              <div
+                className="print-hide"
+                style={{
+                  display: "flex",
+                  justifyContent: "center",
+                  marginTop: "56px",
                 }}
               >
-                {isRunning ? "Running..." : "Run Pipeline"}
-              </button>
+                <button
+                  onClick={handleReset}
+                  style={{
+                    fontSize: "13px",
+                    background: "none",
+                    border: "none",
+                    color: "#B4B2A9",
+                    cursor: "pointer",
+                    textDecoration: "underline",
+                    textUnderlineOffset: "3px",
+                    letterSpacing: "-0.01em",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = "#888780";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = "#B4B2A9";
+                  }}
+                >
+                  ← Start over
+                </button>
+              </div>
+
+              {/* Footer */}
+              <p
+                className="print-hide"
+                style={{
+                  fontSize: "11px",
+                  textAlign: "center",
+                  color: "#D3D1C7",
+                  marginTop: "16px",
+                }}
+              >
+                Powered by Claude claude-sonnet-4-20250514 · Each node is a
+                separate AI call · No data stored
+              </p>
             </div>
-          </div>
-        </div>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* ── Pipeline Visualization ──────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto">
-        {/* Desktop: horizontal pipeline */}
-        <div className="hidden lg:flex items-start gap-0">
-          {PIPELINE_STEPS.map((step, i) => (
-            <div key={step.id} className="flex items-start flex-1 min-w-0">
-              <PipelineNode step={step} index={i} state={steps[i]} />
-              {i < PIPELINE_STEPS.length - 1 && (
-                <Connector filled={steps[i].status === "done"} />
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Mobile: vertical stack */}
-        <div className="lg:hidden flex flex-col gap-2">
-          {PIPELINE_STEPS.map((step, i) => (
-            <div key={step.id}>
-              <PipelineNode step={step} index={i} state={steps[i]} />
-              {i < PIPELINE_STEPS.length - 1 && (
-                <div className="flex justify-center py-1">
-                  <div className="flex flex-col items-center gap-0">
-                    <div
-                      className="w-px"
-                      style={{
-                        height: "16px",
-                        background:
-                          steps[i].status === "done" ? "#5DCAA5" : "#D3D1C7",
-                        transition: "background 0.6s ease",
-                      }}
-                    />
-                    <svg width="9" height="6" viewBox="0 0 9 6" fill="none">
-                      <path
-                        d="M1 0.5L4.5 4L8 0.5"
-                        stroke={
-                          steps[i].status === "done" ? "#5DCAA5" : "#D3D1C7"
-                        }
-                        strokeWidth="1"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        style={{ transition: "stroke 0.6s ease" }}
-                      />
-                    </svg>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Footer ─────────────────────────────────────────────────────── */}
-      <div className="max-w-7xl mx-auto mt-12">
-        <p
-          className="text-[11px] text-center"
-          style={{ color: "#B4B2A9" }}
-        >
-          Powered by Claude claude-sonnet-4-20250514 · Each node is a separate AI call · No data stored
-        </p>
-      </div>
-
-      {/* Spinner keyframe via style tag */}
+      {/* ── Global keyframes + print styles ─────────────────────────────── */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
+          to   { transform: rotate(360deg); }
         }
         @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
+          50%       { opacity: 0.4; }
+        }
+
+        /* Results grid: single column below 900px */
+        @media (max-width: 900px) {
+          .results-grid {
+            grid-template-columns: 1fr !important;
+          }
+          .results-grid > *:last-child {
+            grid-column: auto !important;
+          }
+        }
+
+        /* Print styles */
+        @media print {
+          .print-hide { display: none !important; }
+          #print-header { display: block !important; }
+          body { background: #fff !important; }
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .results-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
         }
       `}</style>
     </div>
